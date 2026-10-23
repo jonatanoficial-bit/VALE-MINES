@@ -1,0 +1,12 @@
+{
+  "name": "VALE MINES - FRONTLINE",
+  "short_name": "Vale Mines",
+  "description": "Campo Minado tatico para jogar localmente.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#121b21",
+  "theme_color": "#121b21",
+  "icons": [
+    { "src": "./favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
