@@ -8,6 +8,7 @@ import { visibleScore } from './domain/scoring'
 import { levelForXP, rankForLevel, xpProgress } from './domain/xp'
 import { cloudStatus } from './cloud/firebase'
 import { localStore } from './storage/local'
+import { getSoundEnabled, playSfx, setSoundEnabled as storeSoundEnabled, type SfxName } from './audio/sfx'
 import './App.css'
 
 type Screen = 'home' | 'setup' | 'briefing' | 'game' | 'ranking' | 'results'
@@ -73,7 +74,17 @@ function App() {
   const [interactionMode, setInteractionMode] = useState<InteractionMode>('reveal')
   const [inputLocked, setInputLocked] = useState(false)
   const [clock, setClock] = useState(0)
+  const [soundEnabled, setSoundEnabled] = useState(() => getSoundEnabled())
   const lockRef = useRef(false)
+
+  const play = (name: SfxName) => playSfx(name, soundEnabled)
+
+  const toggleSound = () => {
+    const next = !soundEnabled
+    setSoundEnabled(next)
+    storeSoundEnabled(next)
+    if (next) playSfx('menu', true)
+  }
 
   useEffect(() => {
     void Promise.all([localStore.loadGame(), localStore.loadProfiles(), localStore.loadRanking()]).then(([savedGame, savedProfiles, savedRanking]) => {
@@ -129,6 +140,7 @@ function App() {
   }
 
   const startSetup = (selected: GameMode) => {
+    play('menu')
     setMode(selected)
     setDraftNames(selected === 'solo' ? ['Comandante'] : ['Jogador 1', 'Jogador 2'])
     setDifficulty('recruta')
@@ -172,6 +184,7 @@ function App() {
     void localStore.saveProfiles(storedProfiles)
     try {
       const next = createGame(operationConfig(mode, difficulty, custom), selectedProfiles)
+      play('menu')
       saveAndSetGame(next)
       setMessage(mode === 'solo' ? 'Cada setor exige cautela. A primeira revelação é protegida.' : 'Uma ação válida passa o comando para o próximo participante ativo.')
       setScreen('briefing')
@@ -183,6 +196,7 @@ function App() {
   const enterField = () => {
     if (!game) return
     const next = beginGame(game)
+    play('menu')
     saveAndSetGame(next)
     setMessage('Reconheça o terreno. Clique esquerdo revela; clique direito posiciona sinalizador.')
     setScreen('game')
@@ -205,9 +219,11 @@ function App() {
       const paused = { ...pauseGame(game), elapsedMs: elapsedMs(game), startedAt: undefined }
       saveAndSetGame(paused)
       setMessage('Operação pausada e salva neste dispositivo.')
+      play('menu')
     } else if (game.phase === 'paused') {
       saveAndSetGame(beginGame(game))
       setMessage('Operação retomada.')
+      play('menu')
     }
   }
 
@@ -226,6 +242,10 @@ function App() {
     const lastEvent = result.events[result.events.length - 1]
     setMessage(lastEvent?.message ?? 'Ação registrada.')
     const isFinal = result.nextState.phase === 'won' || result.nextState.phase === 'lost'
+    const sound = isFinal
+      ? result.nextState.phase === 'won' ? 'victory' : 'defeat'
+      : chosen === 'flag' ? 'flag' : lastEvent?.kind === 'mine-hit' ? 'mine' : game.config.mode === 'hotseat' ? 'turn' : 'reveal'
+    play(sound)
     setGame(result.nextState)
     if (!isFinal) void localStore.saveGame(result.nextState)
     lockRef.current = true
@@ -241,6 +261,7 @@ function App() {
   const replay = () => {
     if (!game) return
     const next = createGame(game.config, game.players.map(playerProfile))
+    play('menu')
     saveAndSetGame(next)
     setMessage('Novo terreno gerado. A primeira revelação continuará segura.')
     setScreen('briefing')
@@ -256,6 +277,9 @@ function App() {
           <span><strong>VALE MINES</strong><small>FRONTLINE</small></span>
         </button>
         <div className="save-indicator" title={cloudStatus}><span className="status-dot" /> SALVO NESTE DISPOSITIVO</div>
+        <button className="sound-toggle" onClick={toggleSound} aria-pressed={soundEnabled} aria-label={soundEnabled ? 'Desativar efeitos sonoros' : 'Ativar efeitos sonoros'}>
+          {soundEnabled ? '◖ SOM' : '◖ SOM OFF'}
+        </button>
       </header>
 
       {screen === 'home' && <section className="home-screen">
@@ -273,11 +297,11 @@ function App() {
       {screen === 'setup' && <section className="setup-screen panel-screen">
         <div className="section-title"><p className="eyebrow">PLANEJAMENTO DA MISSÃO</p><h2>Escolha a formação</h2></div>
         <div className="mode-selector">
-          <button className={mode === 'solo' ? 'mission-card selected' : 'mission-card'} onClick={() => { setMode('solo'); setDraftNames(['Comandante']) }}><span className="mission-icon">◉</span><strong>Campanha solo</strong><small>Uma vida. Mina acionada encerra a missão.</small></button>
-          <button className={mode === 'hotseat' ? 'mission-card selected' : 'mission-card'} onClick={() => { setMode('hotseat'); setDraftNames(['Jogador 1', 'Jogador 2']) }}><span className="mission-icon">◫</span><strong>Operação por turnos</strong><small>2–10 pessoas no mesmo aparelho. Três vidas por padrão.</small></button>
+          <button className={mode === 'solo' ? 'mission-card selected' : 'mission-card'} onClick={() => { play('menu'); setMode('solo'); setDraftNames(['Comandante']) }} aria-pressed={mode === 'solo'}><span className="mission-icon">◉</span><strong>Campanha solo</strong><small>Uma vida. Mina acionada encerra a missão.</small></button>
+          <button className={mode === 'hotseat' ? 'mission-card selected' : 'mission-card'} onClick={() => { play('menu'); setMode('hotseat'); setDraftNames(['Jogador 1', 'Jogador 2']) }} aria-pressed={mode === 'hotseat'}><span className="mission-icon">◫</span><strong>Operação por turnos</strong><small>2–10 pessoas no mesmo aparelho. Três vidas por padrão.</small></button>
         </div>
         <h3 className="subheading">Dificuldade</h3>
-        <div className="difficulty-grid">{Object.entries(DIFFICULTIES).map(([key, item]) => <button key={key} className={difficulty === key ? 'difficulty selected' : 'difficulty'} onClick={() => setDifficulty(key as DifficultyId)}><strong>{item.label}</strong><span>{item.width} × {item.height}</span><small>{item.mineCount} minas · ×{item.multiplier.toFixed(1)}</small></button>)}<button className={difficulty === 'custom' ? 'difficulty selected' : 'difficulty'} onClick={() => setDifficulty('custom')}><strong>Personalizado</strong><span>{custom.width} × {custom.height}</span><small>{custom.mineCount} minas · multiplicador calculado</small></button></div>
+        <div className="difficulty-grid">{Object.entries(DIFFICULTIES).map(([key, item]) => <button key={key} className={difficulty === key ? 'difficulty selected' : 'difficulty'} onClick={() => { play('menu'); setDifficulty(key as DifficultyId) }} aria-pressed={difficulty === key}><strong>{item.label}</strong><span>{item.width} × {item.height}</span><small>{item.mineCount} minas · ×{item.multiplier.toFixed(1)}</small></button>)}<button className={difficulty === 'custom' ? 'difficulty selected' : 'difficulty'} onClick={() => { play('menu'); setDifficulty('custom') }} aria-pressed={difficulty === 'custom'}><strong>Personalizado</strong><span>{custom.width} × {custom.height}</span><small>{custom.mineCount} minas · multiplicador calculado</small></button></div>
         {difficulty === 'custom' && <div className="custom-grid"><label>Largura<input type="number" min="7" max="30" value={custom.width} onChange={(event) => setCustom((value) => { const width = Math.min(30, Math.max(7, Number(event.target.value) || 7)); return { ...value, width, mineCount: Math.min(value.mineCount, width * value.height - 9) } })} /></label><label>Altura<input type="number" min="7" max="24" value={custom.height} onChange={(event) => setCustom((value) => { const height = Math.min(24, Math.max(7, Number(event.target.value) || 7)); return { ...value, height, mineCount: Math.min(value.mineCount, value.width * height - 9) } })} /></label><label>Minas<input type="number" min="1" max={custom.width * custom.height - 9} value={custom.mineCount} onChange={(event) => setCustom((value) => ({ ...value, mineCount: Math.min(value.width * value.height - 9, Math.max(1, Number(event.target.value) || 1)) }))} /></label></div>}
         <h3 className="subheading">{mode === 'solo' ? 'Identidade de campo' : `Esquadrão local (${draftNames.length}/10)`}</h3>
         <div className="roster-editor">{draftNames.map((name, index) => <label className="roster-row" key={`${index}-${name}`}><span className="avatar" style={{ backgroundColor: localColors[index] }}>{avatars[index]}</span><input value={name} maxLength={18} onChange={(event) => setDraftNames((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} aria-label={`Nome do participante ${index + 1}`} />{mode === 'hotseat' && <span className="roster-actions"><button className="icon-button" disabled={index === 0} onClick={() => moveParticipant(index, -1)} aria-label={`Mover ${name} para cima`}>↑</button><button className="icon-button" disabled={index === draftNames.length - 1} onClick={() => moveParticipant(index, 1)} aria-label={`Mover ${name} para baixo`}>↓</button>{draftNames.length > 2 && <button className="icon-button" onClick={() => setDraftNames((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remover ${name}`}>×</button>}</span>}</label>)}{mode === 'hotseat' && draftNames.length < 10 && <button className="add-player" onClick={addParticipant}>+ Incluir participante</button>}</div>

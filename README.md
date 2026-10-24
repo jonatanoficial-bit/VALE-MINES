@@ -10,6 +10,8 @@ Campo Minado tático responsivo, em pt-BR, para navegador e PWA. A primeira entr
 - XP, níveis e patentes locais; ranking local real e histórico mantidos no dispositivo.
 - Salvamento automático em IndexedDB (com fallback localStorage), pausa, continuar operação e PWA instalável.
 - Visual mobile/desktop com o general apontando para o campo e um posto de comando no fundo.
+- Tela de configuração compacta no celular, rolagem natural e ações fixas no rodapé para confirmar sem perder o contexto.
+- Efeitos sonoros táticos gerados no próprio navegador, com controle de som persistente e sem baixar arquivos externos.
 
 ## Rodar localmente
 
@@ -37,6 +39,12 @@ pnpm build
 ## Nuvem e multiplayer online
 
 A primeira versão funciona localmente e offline. O arquivo `.env.example` e as regras do Firestore estão incluídos para a próxima fase, mas a sincronização só deve ser ativada depois de configurar um projeto Firebase real. O multiplayer em aparelhos diferentes é futuro e não é anunciado como pronto nesta versão.
+
+## Qualidade e Lote 2
+
+- A PWA só registra o service worker no build de produção, evitando cache antigo durante o desenvolvimento.
+- Metadados de busca e compartilhamento foram adicionados, além de foco visível e preferências de movimento reduzido.
+- O workflow `.github/workflows/ci.yml` executa lint, tipos, testes e build em cada push e pull request para `main`.
 
 ## GitHub Pages
 
